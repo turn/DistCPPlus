@@ -1,6 +1,8 @@
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -16,16 +18,20 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.hdfs.protocol.QuotaExceededException;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.ipc.RemoteException;
+import org.apache.hadoop.mapred.FileOutputFormat;
+import org.apache.hadoop.mapred.JobClient;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapreduce.JobSubmissionFiles;
+import org.apache.hadoop.mapreduce.security.TokenCache;
 import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-
-import com.google.common.collect.Maps;
 
 
 /**
@@ -34,10 +40,10 @@ import com.google.common.collect.Maps;
  *
  * NOTE: this file is mostly from org.apache.hadoop.tools.DistCp.
  */
-public class DistCpPlus implements Tool {
-    public static final Log LOG = LogFactory.getLog(DistCpPlus.class);
+public class DistCPPlus implements Tool {
+    public static final Log LOG = LogFactory.getLog(DistCPPlus.class);
 
-    private static final String NAME = "DistCpPlus";
+    static final String NAME = "DistCpPlus";
 
     private static final String usage = NAME
             + " [OPTIONS] <srcurl>* <desturl>" +
@@ -94,48 +100,12 @@ public class DistCpPlus implements Tool {
     private static final long BYTES_PER_MAP =  256 * 1024 * 1024;
     private static final int MAX_MAPS_PER_NODE = 20;
     private static final int SYNC_FILE_MAX = 10;
-    private static final String MAX_SOURCE_SIZE_FOR_PRINTING_KEY = "Distcp++.MaxSourcesToPrint";
-    private static final int MAX_SOURCE_SIZE_FOR_PRINTING =
-            Config.getInstance().getIntProperty(MAX_SOURCE_SIZE_FOR_PRINTING_KEY, 30);
+    private static final int MAX_SOURCE_SIZE_FOR_PRINTING = 30;
 
     private static JobConf lastProcessedJob;
 
     public static enum Counter { COPY, SKIP, FAIL, BYTESCOPIED, BYTESEXPECTED, RECORDSKIPPED }
-    public static enum Options {
-        DELETE("-delete", NAME + ".delete"),
-        FILE_LIMIT("-filelimit", NAME + ".limit.file"),
-        SIZE_LIMIT("-sizelimit", NAME + ".limit.size"),
-        IGNORE_READ_FAILURES("-i", NAME + ".ignore.read.failures"),
-        PRESERVE_STATUS("-p", NAME + ".preserve.status"),
-        OVERWRITE("-overwrite", NAME + ".overwrite.always"),
-        UPDATE("-update", NAME + ".overwrite.ifnewer"),
-        SKIPCRC("-skipcrccheck", NAME + ".skip.crc.check"),
-        SKIPTS("-skiptscheck", NAME + ".skip.ts.check"),
-        SKIPUPDATECHECK("-skipupdatecheck", NAME+".skip.update.check");
-
-        final String cmd, propertyname;
-
-        private Options(String cmd, String propertyname) {
-            this.cmd = cmd;
-            this.propertyname = propertyname;
-        }
-
-        public long parseLong(String[] args, int offset) {
-            if (offset ==  args.length) {
-                throw new IllegalArgumentException("<n> not specified in " + cmd);
-            }
-            long n = StringUtils.TraditionalBinaryPrefix.string2long(args[offset]);
-            if (n <= 0) {
-                throw new IllegalArgumentException("n = " + n + " <= 0 in " + cmd);
-            }
-            return n;
-        }
-
-        public String getCommand() {
-            return cmd;
-        }
-    }
-
+    
     public static final String TMP_DIR_LABEL = NAME + ".tmp.dir";
     public static final String DST_DIR_LABEL = NAME + ".dest.path";
     public static final String JOB_DIR_LABEL = NAME + ".job.dir";
@@ -177,7 +147,7 @@ public class DistCpPlus implements Tool {
         return conf;
     }
 
-    public DistCpPlus(Configuration conf, boolean isReal) {
+    public DistCPPlus(Configuration conf, boolean isReal) {
         setConf(conf);
         is_real = isReal;
     }
@@ -385,8 +355,8 @@ public class DistCpPlus implements Tool {
     }
 
     public static void main(String[] args) throws Exception {
-        JobConf job = new JobConf(DistCpPlus.class);
-        DistCpPlus distcp = new DistCpPlus(job, true);
+        JobConf job = new JobConf(DistCPPlus.class);
+        DistCPPlus distcp = new DistCPPlus(job, true);
         int res = ToolRunner.run(distcp, args);
         System.exit(res);
     }
@@ -398,8 +368,8 @@ public class DistCpPlus implements Tool {
      */
     public static JobConf generateConf(String[] args) throws Exception {
         String[] newArgs = (String[]) ArrayUtils.addAll(new String[]{"-exportOnly"}, args);
-        JobConf job = new JobConf(DistCpPlus.class);
-        DistCpPlus distcp = new DistCpPlus(job, true);
+        JobConf job = new JobConf(DistCPPlus.class);
+        DistCPPlus distcp = new DistCPPlus(job, true);
         int res = ToolRunner.run(distcp, newArgs);
         if (res != 0) {
             throw new RuntimeException("Got error code " + String.valueOf(res));
@@ -478,7 +448,7 @@ public class DistCpPlus implements Tool {
     //Job configuration
     private static JobConf createJobConf(Configuration conf)
     {
-        JobConf jobconf = new JobConf(conf, DistCpPlus.class);
+        JobConf jobconf = new JobConf(conf, DistCPPlus.class);
         jobconf.setJobName(NAME);
 
         // turn off speculative execution, because DFS doesn't handle
