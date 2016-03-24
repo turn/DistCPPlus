@@ -1,3 +1,4 @@
+package com.turn.hadoop.distcp;
 import org.apache.hadoop.util.StringUtils;
 
 

@@ -1,3 +1,4 @@
+package com.turn.hadoop.distcp;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -514,13 +515,13 @@ public class DistCPPlus implements Tool {
 
         final String randomId = getRandomId();
         JobClient jClient = new JobClient(jobConf);
-        Path stagingArea;
-        try {
-            stagingArea = JobSubmissionFiles.getStagingDir(jClient, conf);
-        } catch (InterruptedException e) {
-            throw new IOException(e);
-        }
-
+//        Path stagingArea;
+//        try {
+//            stagingArea = JobSubmissionFiles.getStagingDir(jClient, conf);
+//        } catch (InterruptedException e) {
+//            throw new IOException(e);
+//        }
+        String stagingArea = "/tmp/distcp/";
         Path jobDirectory = new Path(stagingArea + NAME + "_" + randomId);
         FsPermission mapredSysPerms =
                 new FsPermission(JobSubmissionFiles.JOB_DIR_PERMISSION);
