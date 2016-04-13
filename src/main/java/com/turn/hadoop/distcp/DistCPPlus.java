@@ -152,6 +152,10 @@ public class DistCPPlus implements Tool {
         setConf(conf);
         is_real = isReal;
     }
+    
+    public DistCPPlus() {
+        this(new Configuration(), true);
+    }
 
     /**
      * Driver to copy srcPath to destPath depending on required protocol.
